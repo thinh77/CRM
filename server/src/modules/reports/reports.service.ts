@@ -67,6 +67,17 @@ function resolveDateRange(dateFrom?: string, dateTo?: string) {
   return { fromDate, toDate };
 }
 
+function formatVietnamDate(date: Date | null | undefined): string {
+  if (!date) return "";
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 export async function getNewCustomersReport(filters: ReportFilters = {}): Promise<NewCustomersReport> {
   const { fromDate, toDate } = resolveDateRange(filters.dateFrom, filters.dateTo);
   const conditions = [];
@@ -159,6 +170,7 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
       leadSource: customers.leadSource,
       notes: customers.notes,
       createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
     })
     .from(customers)
     .leftJoin(users, eq(customers.consultantId, users.id))
@@ -194,7 +206,6 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
 
   const detailSheet = workbook.addWorksheet("Danh sach KH moi");
   detailSheet.columns = [
-    { header: "Ngày tạo", key: "createdAt", width: 22 },
     { header: "Tên HKD", key: "businessName", width: 30 },
     { header: "Chủ hộ", key: "ownerName", width: 24 },
     { header: "Số ĐKKD", key: "registrationNumber", width: 18 },
@@ -209,6 +220,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
     { header: "CBTV", key: "consultantName", width: 24 },
     { header: "Nguồn lead", key: "leadSource", width: 20 },
     { header: "Ghi chú", key: "notes", width: 36 },
+    { header: "Ngày tạo", key: "createdAt", width: 16 },
+    { header: "Ngày cập nhật cuối", key: "updatedAt", width: 22 },
   ];
 
   detailSheet.getRow(1).font = { bold: true };
@@ -220,7 +233,6 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
 
   for (const row of rows) {
     detailSheet.addRow({
-      createdAt: row.createdAt.toLocaleString("vi-VN"),
       businessName: row.businessName,
       ownerName: row.ownerName,
       registrationNumber: row.registrationNumber || "",
@@ -235,6 +247,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
       consultantName: row.consultantName || "",
       leadSource: row.leadSource || "",
       notes: row.notes || "",
+      createdAt: formatVietnamDate(row.createdAt),
+      updatedAt: formatVietnamDate(row.updatedAt),
     });
   }
 

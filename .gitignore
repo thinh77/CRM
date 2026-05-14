@@ -18,6 +18,9 @@ nginx.conf
 tests/
 
 *.test.*
+!server/tests/
+server/tests/*
+!server/tests/reports.test.ts
 
 # Build output
 dist/
