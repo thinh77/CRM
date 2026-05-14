@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: -p 5433
+    environment:
+      POSTGRES_DB: crm_db
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5433:5433"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_db -p 5433"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run db:migrate && npm run db:seed && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5433
+      DB_NAME: crm_db
+      DB_USER: crm_user
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_access_secret_change_me_32chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me_32chars}
+      NODE_ENV: development
+      PORT: 3002
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./server:/app
+      - server_node_modules:/app/node_modules
+
+  client:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - server
+    environment:
+      VITE_API_URL: http://server:3002
+    ports:
+      - "5174:5173"
+    volumes:
+      - ./client:/app
+      - client_node_modules:/app/node_modules
+
+volumes:
+  pgdata_dev:
+  server_node_modules:
+  client_node_modules:

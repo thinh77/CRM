@@ -1,0 +1,95 @@
+# Production Docker Compose
+# Sử dụng: cp .env.production.example .env → chỉnh sửa .env → docker compose up -d
+#
+# Lần đầu deploy (seed dữ liệu):
+#   docker compose --profile seed up seed
+#
+# Chỉ chạy migration:
+#   docker compose --profile migrate run --rm migrate
+
+services:
+  # ── PostgreSQL ──
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env
+    command: -p 5433
+    environment:
+      POSTGRES_DB: ${DB_NAME:-crm_db}
+      POSTGRES_USER: ${DB_USER:-crm_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-crm_user} -d ${DB_NAME:-crm_db} -p 5433"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    # Không expose port ra ngoài trong production
+
+  # ── Database Migration (chạy rồi thoát) ──
+  migrate:
+    build:
+      context: ./server
+      target: builder
+    command: npm run db:migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+    restart: "no"
+    networks:
+      - internal
+
+  # ── Database Seed (chỉ chạy lần đầu) ──
+  seed:
+    build:
+      context: ./server
+      target: builder
+    command: npx tsx src/db/seed.ts
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+    restart: "no"
+    profiles: ["seed"]
+    networks:
+      - internal
+
+  # ── API Server ──
+  server:
+    build:
+      context: ./server
+      target: production
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      DB_HOST: db
+      NODE_ENV: production
+      CORS_ORIGIN: ""
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:3002:3002"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
