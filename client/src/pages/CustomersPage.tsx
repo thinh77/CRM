@@ -111,7 +111,7 @@ export function CustomersPage() {
                 type="text"
                 value={filters.search}
                 onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                placeholder="Tên HKD, chủ hộ, SĐT, ĐKKD..."
+                placeholder="Tên HKD, chủ hộ, Mã KH, SĐT, ĐKKD..."
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm"
               />
             </div>
@@ -238,6 +238,7 @@ export function CustomersPage() {
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Tên HKD</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Chủ hộ</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Mã KH</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">SĐT</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">TK</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Số dư</th>
@@ -257,6 +258,7 @@ export function CustomersPage() {
                     >
                       <td className="px-4 py-3 font-medium">{customer.businessName}</td>
                       <td className="px-4 py-3">{customer.ownerName}</td>
+                      <td className="px-4 py-3">{customer.customerCode || "-"}</td>
                       <td className="px-4 py-3">{customer.phone}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block w-2 h-2 rounded-full ${customer.hasAccount ? "bg-green-500" : "bg-gray-300"}`} />
@@ -321,7 +323,7 @@ export function CustomersPage() {
                   ))}
                   {data?.data.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                         Không có dữ liệu
                       </td>
                     </tr>

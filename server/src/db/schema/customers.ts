@@ -20,6 +20,7 @@ export const customers = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     businessName: varchar("business_name", { length: 255 }).notNull(),
     ownerName: varchar("owner_name", { length: 150 }).notNull(),
+    customerCode: varchar("customer_code", { length: 50 }),
     registrationNumber: varchar("registration_number", { length: 50 }),
     phone: varchar("phone", { length: 20 }),
     address: text("address"),
@@ -46,6 +47,7 @@ export const customers = pgTable(
     index("idx_customers_software").on(table.software),
     index("idx_customers_business_name").on(table.businessName),
     index("idx_customers_owner_name").on(table.ownerName),
+    index("idx_customers_customer_code").on(table.customerCode),
     uniqueIndex("idx_customers_account_number").on(table.accountNumber),
     check(
       "software_check",

@@ -17,7 +17,15 @@ export interface CustomerFilters {
   sortOrder?: string;
 }
 
-export type CustomerImportType = "standard" | "mist81";
+export type CustomerImportType = "standard" | "mist81" | "agribankPlus";
+
+export interface CustomerImportResult {
+  success: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+  skippedRows: { row: number; message: string }[];
+}
 
 export const customersApi = {
   list: (filters: CustomerFilters = {}) =>
@@ -42,7 +50,7 @@ export const customersApi = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("type", type);
-    return client.post<ApiResponse<{ success: number; updated: number; errors: { row: number; message: string }[] }>>(
+    return client.post<ApiResponse<CustomerImportResult>>(
       "/customers/import",
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }

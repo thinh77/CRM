@@ -44,6 +44,7 @@ export interface Customer {
   id: string;
   businessName: string;
   ownerName: string;
+  customerCode: string | null;
   registrationNumber: string | null;
   phone: string | null;
   address: string | null;

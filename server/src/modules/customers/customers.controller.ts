@@ -103,7 +103,10 @@ export async function importCustomers(req: Request, res: Response, next: NextFun
     if (!req.file) {
       throw new AppError("Vui lòng chọn file để import", 400);
     }
-    const importType = req.body?.type === "mist81" ? "mist81" : "standard";
+    const importType =
+      req.body?.type === "mist81" || req.body?.type === "agribankPlus"
+        ? req.body.type
+        : "standard";
     const result = await customersService.importFromFile(
       req.file.buffer,
       req.file.originalname,
@@ -146,6 +149,7 @@ export async function downloadTemplate(_req: Request, res: Response, next: NextF
     worksheet.columns = [
       { header: "Tên HKD", key: "businessName", width: 30 },
       { header: "Chủ hộ", key: "ownerName", width: 20 },
+      { header: "Mã KH", key: "customerCode", width: 15 },
       { header: "Số ĐKKD", key: "registrationNumber", width: 15 },
       { header: "SĐT", key: "phone", width: 15 },
       { header: "Địa chỉ", key: "address", width: 30 },
@@ -169,6 +173,7 @@ export async function downloadTemplate(_req: Request, res: Response, next: NextF
     worksheet.addRow({
       businessName: "HKD Nguyễn Văn A",
       ownerName: "Nguyễn Văn A",
+      customerCode: "CUST001",
       registrationNumber: "41A8012345",
       phone: "0901234567",
       address: "123 Nguyễn Huệ, Q.1, TP.HCM",

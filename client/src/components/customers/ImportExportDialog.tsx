@@ -17,7 +17,9 @@ export function ImportExportDialog({ open, onClose, onImportSuccess }: Props) {
   const [importResult, setImportResult] = useState<{
     success: number;
     updated: number;
+    skipped: number;
     errors: { row: number; message: string }[];
+    skippedRows: { row: number; message: string }[];
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,13 +29,18 @@ export function ImportExportDialog({ open, onClose, onImportSuccess }: Props) {
     onSuccess: (res) => {
       const result = res.data.data;
       setImportResult(result);
+      const changedRows = result.success + result.updated;
+      if (changedRows > 0) {
+        toast.success(`Import thành công: ${result.success} thêm mới, ${result.updated} cập nhật`);
+        onImportSuccess();
+        return;
+      }
       if (result.errors.length > 0) {
         toast.error(`${result.errors.length} dòng bị lỗi. Không có dòng nào được import`);
         return;
       }
-      if (result.success > 0 || result.updated > 0) {
-        toast.success(`Import thành công: ${result.success} thêm mới, ${result.updated} cập nhật`);
-        onImportSuccess();
+      if (result.skipped > 0) {
+        toast.warning(`${result.skipped} dòng không khớp khách hàng`);
       }
     },
     onError: (err: any) => {
@@ -111,6 +118,15 @@ export function ImportExportDialog({ open, onClose, onImportSuccess }: Props) {
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             Import MIST81 (.xls)
           </Button>
+          <Button
+            onClick={() => handleImport("agribankPlus")}
+            disabled={!file || importMutation.isPending}
+            variant="secondary"
+            className="w-full justify-center sm:col-span-2"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Import Agribank Plus (.xls)
+          </Button>
         </div>
 
         {importResult && (
@@ -120,10 +136,24 @@ export function ImportExportDialog({ open, onClose, onImportSuccess }: Props) {
                 ✓ Thành công: {importResult.success} thêm mới, {importResult.updated} cập nhật
               </p>
             )}
+            {importResult.skipped > 0 && (
+              <div className="mt-2">
+                <p className="font-medium text-amber-700">
+                  Bỏ qua: {importResult.skipped} dòng không khớp khách hàng
+                </p>
+                <ul className="mt-1 max-h-40 overflow-y-auto space-y-1">
+                  {importResult.skippedRows.map((row, i) => (
+                    <li key={i} className="text-amber-700">
+                      Dòng {row.row}: {row.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {importResult.errors.length > 0 && (
               <div className="mt-2">
                 <p className="font-medium text-red-700">
-                  ✗ Lỗi: {importResult.errors.length} dòng (không có dòng nào được import)
+                  ✗ Lỗi: {importResult.errors.length} dòng
                 </p>
                 <ul className="mt-1 max-h-40 overflow-y-auto space-y-1">
                   {importResult.errors.map((err, i) => (

@@ -34,6 +34,7 @@ export function CustomerDetailModal({ open, onClose, customer }: CustomerDetailM
       <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Tên HKD" value={customer.businessName} />
         <Field label="Chủ hộ" value={customer.ownerName} />
+        <Field label="Mã KH" value={customer.customerCode} />
         <Field label="Số ĐKKD" value={customer.registrationNumber} />
         <Field label="SĐT" value={customer.phone} />
         <div className="md:col-span-2">

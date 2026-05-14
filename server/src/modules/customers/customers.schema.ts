@@ -5,6 +5,7 @@ const softwareEnum = z.enum(["MISA", "VNPAY", "NO", "OTHER"]);
 const customerBaseObject = z.object({
   businessName: z.string().min(1, "Tên hộ kinh doanh không được để trống").max(255),
   ownerName: z.string().min(1, "Tên chủ hộ không được để trống").max(150),
+  customerCode: z.string().max(50).optional().nullable(),
   registrationNumber: z.string().max(50).optional().nullable(),
   phone: z.string().max(20).optional().nullable(),
   address: z.string().optional().nullable(),

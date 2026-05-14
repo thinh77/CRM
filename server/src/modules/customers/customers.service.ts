@@ -16,7 +16,15 @@ import type {
   PoolQuery,
 } from "./customers.schema.js";
 
-export type CustomerImportType = "standard" | "mist81";
+export type CustomerImportType = "standard" | "mist81" | "agribankPlus";
+
+export interface CustomerImportResult {
+  success: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+  skippedRows: { row: number; message: string }[];
+}
 
 type FormulaResolver = (formula: string) => unknown;
 
@@ -195,6 +203,12 @@ export function formatDate(date: Date | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+function normalizeText(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export async function list(query: CustomerQuery, userId: string, canViewAll: boolean) {
   const conditions = [];
 
@@ -208,6 +222,7 @@ export async function list(query: CustomerQuery, userId: string, canViewAll: boo
       or(
         ilike(customers.businessName, `%${query.search}%`),
         ilike(customers.ownerName, `%${query.search}%`),
+        ilike(customers.customerCode, `%${query.search}%`),
         ilike(customers.phone, `%${query.search}%`),
         ilike(customers.registrationNumber, `%${query.search}%`),
         ilike(customers.accountNumber, `%${query.search}%`)
@@ -267,6 +282,7 @@ export async function list(query: CustomerQuery, userId: string, canViewAll: boo
         id: customers.id,
         businessName: customers.businessName,
         ownerName: customers.ownerName,
+        customerCode: customers.customerCode,
         registrationNumber: customers.registrationNumber,
         phone: customers.phone,
         address: customers.address,
@@ -310,6 +326,7 @@ export async function getById(id: string, userId: string, canViewAll: boolean) {
       id: customers.id,
       businessName: customers.businessName,
       ownerName: customers.ownerName,
+      customerCode: customers.customerCode,
       registrationNumber: customers.registrationNumber,
       phone: customers.phone,
       address: customers.address,
@@ -511,13 +528,147 @@ export async function getStats(userId: string, canViewAll: boolean) {
   return stats;
 }
 
+async function importAgribankPlusFromFile(
+  buffer: Buffer,
+  filename: string,
+  userId: string,
+  ip?: string
+): Promise<CustomerImportResult> {
+  const ext = filename.toLowerCase().split(".").pop();
+  if (ext !== "xls") {
+    throw new AppError("Import Agribank Plus chỉ chấp nhận file .xls", 400);
+  }
+
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) throw new AppError("File Excel không có sheet nào", 400);
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const table = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+    blankrows: false,
+  }) as unknown[][];
+
+  const headerRow = table[0] ?? [];
+  const headerIndexes = new Map<string, number>();
+  headerRow.forEach((value, index) => {
+    const header = normalizeText(getCellText(value))?.toLowerCase();
+    if (header) headerIndexes.set(header, index);
+  });
+
+  const requiredHeaders = ["custseq", "mblno1"];
+  const missingHeaders = requiredHeaders.filter((header) => !headerIndexes.has(header));
+  if (missingHeaders.length > 0) {
+    throw new AppError(`File Agribank Plus thiếu cột bắt buộc: ${missingHeaders.join(", ")}`, 400);
+  }
+
+  const results: CustomerImportResult = {
+    success: 0,
+    updated: 0,
+    skipped: 0,
+    errors: [],
+    skippedRows: [],
+  };
+  const validRows: { rowNumber: number; customerCode: string; phone: string }[] = [];
+  const customerCodeIndex = headerIndexes.get("custseq")!;
+  const phoneIndex = headerIndexes.get("mblno1")!;
+
+  table.slice(1).forEach((row, index) => {
+    if (!row.some((value) => normalizeText(getCellText(value)))) return;
+
+    const rowNumber = index + 2;
+    const customerCode = normalizeText(getCellText(row[customerCodeIndex]));
+    const phone = normalizeText(getCellText(row[phoneIndex]));
+
+    if (!customerCode) {
+      results.errors.push({ row: rowNumber, message: "Thiếu custseq" });
+    }
+    if (!phone) {
+      results.errors.push({ row: rowNumber, message: "Thiếu mblno1" });
+    }
+    if (!customerCode || !phone) return;
+
+    validRows.push({ rowNumber, customerCode, phone });
+  });
+
+  const uniqueCodes = [...new Set(validRows.map((row) => row.customerCode))];
+  const customerIdsByCode = new Map<string, string[]>();
+
+  if (uniqueCodes.length > 0) {
+    const matchedCustomers = await db
+      .select({ id: customers.id, customerCode: customers.customerCode })
+      .from(customers)
+      .where(inArray(customers.customerCode, uniqueCodes));
+
+    for (const customer of matchedCustomers) {
+      if (!customer.customerCode) continue;
+      const ids = customerIdsByCode.get(customer.customerCode) ?? [];
+      ids.push(customer.id);
+      customerIdsByCode.set(customer.customerCode, ids);
+    }
+  }
+
+  const updates: { ids: string[]; phone: string }[] = [];
+  for (const row of validRows) {
+    const ids = customerIdsByCode.get(row.customerCode) ?? [];
+    if (ids.length === 0) {
+      results.skipped += 1;
+      results.skippedRows.push({
+        row: row.rowNumber,
+        message: `Không tìm thấy khách hàng có mã "${row.customerCode}"`,
+      });
+      continue;
+    }
+    updates.push({ ids, phone: row.phone });
+  }
+
+  await db.transaction(async (tx) => {
+    for (const update of updates) {
+      const updatedRows = await tx
+        .update(customers)
+        .set({
+          phone: update.phone,
+          hasAgribankPlus: true,
+          updatedBy: userId,
+          updatedAt: new Date(),
+        })
+        .where(inArray(customers.id, update.ids))
+        .returning({ id: customers.id });
+      results.updated += updatedRows.length;
+    }
+  });
+
+  await db.insert(auditLogs).values({
+    userId,
+    action: "IMPORT",
+    resource: "customers",
+    newData: {
+      filename,
+      type: "agribankPlus",
+      success: results.success,
+      updated: results.updated,
+      skipped: results.skipped,
+      errors: results.errors.length,
+    },
+    ipAddress: ip,
+  });
+
+  return results;
+}
+
 export async function importFromFile(
   buffer: Buffer,
   filename: string,
   userId: string,
   ip?: string,
   importType: CustomerImportType = "standard"
-): Promise<{ success: number; updated: number; errors: { row: number; message: string }[] }> {
+): Promise<CustomerImportResult> {
+  if (importType === "agribankPlus") {
+    return importAgribankPlusFromFile(buffer, filename, userId, ip);
+  }
+
   type ImportedRow = { rowNumber: number; data: Record<string, any>; rawData: Record<string, unknown> };
   type InsertItem = { data: CreateCustomerInput; accountOpenedAt?: Date };
   type UpsertItem = { id: string; payload: CreateCustomerInput; accountOpenedAt?: Date };
@@ -606,6 +757,10 @@ export async function importFromFile(
     "Customer_Name": "customerName",
     "Chủ hộ": "ownerName",
     "ownerName": "ownerName",
+    "Mã KH": "customerCode",
+    "Mã khách hàng": "customerCode",
+    "customerCode": "customerCode",
+    "Customer_No": "customerCode",
     "Số ĐKKD": "registrationNumber",
     "registrationNumber": "registrationNumber",
     "SĐT": "phone",
@@ -680,7 +835,13 @@ export async function importFromFile(
     return num >= 1 && num <= 4 ? num : undefined;
   };
 
-  const results = { success: 0, updated: 0, errors: [] as { row: number; message: string }[] };
+  const results: CustomerImportResult = {
+    success: 0,
+    updated: 0,
+    skipped: 0,
+    errors: [],
+    skippedRows: [],
+  };
   const toInsert: InsertItem[] = [];
   const toUpdate: UpsertItem[] = [];
   const seenAccountNumbers = new Map<string, number>();
@@ -766,6 +927,7 @@ export async function importFromFile(
           id: string;
           businessName: string;
           ownerName: string;
+          customerCode: string | null;
           registrationNumber: string | null;
           phone: string | null;
           address: string | null;
@@ -790,6 +952,7 @@ export async function importFromFile(
             id: customers.id,
             businessName: customers.businessName,
             ownerName: customers.ownerName,
+            customerCode: customers.customerCode,
             registrationNumber: customers.registrationNumber,
             phone: customers.phone,
             address: customers.address,
@@ -823,6 +986,7 @@ export async function importFromFile(
     const payload = {
       businessName: normalizeText(mapped.businessName) ?? existingCustomer?.businessName,
       ownerName: normalizeText(mapped.ownerName) ?? existingCustomer?.ownerName,
+      customerCode: normalizeText(mapped.customerCode) ?? existingCustomer?.customerCode ?? null,
       registrationNumber: registrationNumber ?? existingCustomer?.registrationNumber ?? null,
       phone: normalizeText(mapped.phone) ?? existingCustomer?.phone ?? null,
       address: normalizeText(mapped.address) ?? existingCustomer?.address ?? null,
@@ -863,7 +1027,7 @@ export async function importFromFile(
       userId,
       action: "IMPORT",
       resource: "customers",
-      newData: { filename, success: 0, errors: results.errors.length },
+      newData: { filename, success: 0, updated: 0, skipped: 0, errors: results.errors.length },
       ipAddress: ip,
     });
 
@@ -905,7 +1069,7 @@ export async function importFromFile(
     userId,
     action: "IMPORT",
     resource: "customers",
-    newData: { filename, success: results.success, updated: results.updated, errors: 0 },
+    newData: { filename, success: results.success, updated: results.updated, skipped: 0, errors: 0 },
     ipAddress: ip,
   });
 
@@ -919,6 +1083,7 @@ export async function exportToExcel(userId: string, canViewAll: boolean): Promis
     .select({
       businessName: customers.businessName,
       ownerName: customers.ownerName,
+      customerCode: customers.customerCode,
       registrationNumber: customers.registrationNumber,
       phone: customers.phone,
       address: customers.address,
@@ -944,6 +1109,7 @@ export async function exportToExcel(userId: string, canViewAll: boolean): Promis
   worksheet.columns = [
     { header: "Tên HKD", key: "businessName", width: 30 },
     { header: "Chủ hộ", key: "ownerName", width: 20 },
+    { header: "Mã KH", key: "customerCode", width: 15 },
     { header: "Số ĐKKD", key: "registrationNumber", width: 15 },
     { header: "SĐT", key: "phone", width: 15 },
     { header: "Địa chỉ", key: "address", width: 30 },
@@ -987,6 +1153,7 @@ export async function exportToCsv(userId: string, canViewAll: boolean): Promise<
     .select({
       businessName: customers.businessName,
       ownerName: customers.ownerName,
+      customerCode: customers.customerCode,
       registrationNumber: customers.registrationNumber,
       phone: customers.phone,
       address: customers.address,
@@ -1009,6 +1176,7 @@ export async function exportToCsv(userId: string, canViewAll: boolean): Promise<
   const rows = data.map((row) => ({
     "Tên HKD": row.businessName,
     "Chủ hộ": row.ownerName,
+    "Mã KH": row.customerCode || "",
     "Số ĐKKD": row.registrationNumber || "",
     "SĐT": row.phone || "",
     "Địa chỉ": row.address || "",
@@ -1035,6 +1203,7 @@ export async function listPool(query: PoolQuery) {
       or(
         ilike(customers.businessName, `%${query.search}%`),
         ilike(customers.ownerName, `%${query.search}%`),
+        ilike(customers.customerCode, `%${query.search}%`),
         ilike(customers.phone, `%${query.search}%`),
         ilike(customers.registrationNumber, `%${query.search}%`),
         ilike(customers.accountNumber, `%${query.search}%`)
@@ -1076,6 +1245,7 @@ export async function listPool(query: PoolQuery) {
         id: customers.id,
         businessName: customers.businessName,
         ownerName: customers.ownerName,
+        customerCode: customers.customerCode,
         registrationNumber: customers.registrationNumber,
         phone: customers.phone,
         address: customers.address,

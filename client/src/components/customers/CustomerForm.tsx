@@ -20,6 +20,7 @@ import { useAuthStore } from "@/stores/authStore";
 const customerSchema = z.object({
   businessName: z.string().min(1, "Tên HKD là bắt buộc").max(255),
   ownerName: z.string().min(1, "Tên chủ hộ là bắt buộc").max(150),
+  customerCode: z.string().max(50).optional().or(z.literal("")),
   registrationNumber: z.string().max(50).optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
@@ -76,6 +77,7 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
     defaultValues: {
       businessName: "",
       ownerName: "",
+      customerCode: "",
       registrationNumber: "",
       phone: "",
       address: "",
@@ -97,6 +99,7 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
       reset({
         businessName: customer.businessName || "",
         ownerName: customer.ownerName || "",
+        customerCode: customer.customerCode || "",
         registrationNumber: customer.registrationNumber || "",
         phone: customer.phone || "",
         address: customer.address || "",
@@ -117,6 +120,7 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
       reset({
         businessName: "",
         ownerName: "",
+        customerCode: "",
         registrationNumber: "",
         phone: "",
         address: "",
@@ -152,6 +156,7 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
       const payload = {
         ...data,
         registrationNumber: data.registrationNumber || undefined,
+        customerCode: data.customerCode || undefined,
         accountNumber: data.accountNumber || undefined,
         phone: data.phone || undefined,
         address: data.address || undefined,
@@ -205,6 +210,12 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
             label="Chủ hộ *"
             {...register("ownerName")}
             error={errors.ownerName?.message}
+          />
+          <Input
+            label="Mã KH"
+            maxLength={50}
+            {...register("customerCode")}
+            error={errors.customerCode?.message}
           />
           <Input
             label="Số ĐKKD"

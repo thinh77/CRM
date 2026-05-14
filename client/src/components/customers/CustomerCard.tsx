@@ -40,6 +40,9 @@ export function CustomerCard({ customer, onView, onEdit, onDelete }: CustomerCar
 
       {/* Info rows */}
       <div className="space-y-1 text-sm text-gray-600 mb-3">
+        {customer.customerCode && (
+          <p className="truncate">Mã KH: {customer.customerCode}</p>
+        )}
         {customer.phone && (
           <p>📞 {customer.phone}</p>
         )}
