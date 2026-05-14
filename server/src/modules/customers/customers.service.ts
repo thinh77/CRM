@@ -209,6 +209,11 @@ function normalizeText(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeHeaderKey(value: unknown): string | undefined {
+  const normalized = normalizeText(value);
+  return normalized?.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
 export async function list(query: CustomerQuery, userId: string, canViewAll: boolean) {
   const conditions = [];
 
@@ -554,7 +559,7 @@ async function importAgribankPlusFromFile(
   const headerRow = table[0] ?? [];
   const headerIndexes = new Map<string, number>();
   headerRow.forEach((value, index) => {
-    const header = normalizeText(getCellText(value))?.toLowerCase();
+    const header = normalizeHeaderKey(getCellText(value));
     if (header) headerIndexes.set(header, index);
   });
 
@@ -700,7 +705,22 @@ export async function importFromFile(
       blankrows: false,
     }) as unknown[][];
     const headerRow = table[0] ?? [];
-    const headers = headerRow.map((value) => getCellText(value));
+    const mist81Headers = [
+      "Customer_No",
+      "Customer_Name",
+      "Account_Number",
+      "Curent_Balance",
+      "Opening_Date",
+      "Address",
+    ];
+    const mist81HeaderByKey = new Map(
+      mist81Headers.map((header) => [normalizeHeaderKey(header), header])
+    );
+    const headers = headerRow.map((value) => {
+      const rawHeader = getCellText(value);
+      const normalizedHeader = normalizeHeaderKey(rawHeader);
+      return (normalizedHeader && mist81HeaderByKey.get(normalizedHeader)) || rawHeader;
+    });
     const requiredHeaders = ["Customer_Name", "Account_Number", "Curent_Balance", "Opening_Date", "Address"];
     const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
     if (missingHeaders.length > 0) {

@@ -74,6 +74,42 @@ describe("MIST81 customer import", () => {
     expect(imported.customerCode).toBe("MIST81-CUST-001");
   });
 
+  it("accepts MIST81 headers with spaces, dashes, and different casing", async () => {
+    const buffer = createMist81Xls([
+      ["Customer No", "CUSTOMER NAME", "Account-Number", "Curent Balance", "Opening Date", "ADDRESS"],
+      ["MIST81-CUST-SPACE", "HKD MIST81 Flexible Headers", "6421000000204", "4,000", "20/03/2020", "Flexible Street"],
+    ]);
+
+    const result = await customersService.importFromFile(
+      buffer,
+      "mist81-flexible-headers.xls",
+      testUserId,
+      "127.0.0.1",
+      "mist81"
+    );
+
+    expect(result).toMatchObject({ success: 1, updated: 0, errors: [] });
+
+    const [imported] = await db
+      .select({
+        businessName: customers.businessName,
+        customerCode: customers.customerCode,
+        accountNumber: customers.accountNumber,
+        balance: customers.balance,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.accountNumber, "6421000000204"));
+
+    expect(imported).toMatchObject({
+      businessName: "HKD MIST81 Flexible Headers",
+      customerCode: "MIST81-CUST-SPACE",
+      accountNumber: "6421000000204",
+      balance: "4000.00",
+      address: "Flexible Street",
+    });
+  });
+
   it("does not require Customer_No for MIST81 imports", async () => {
     const buffer = createMist81Xls([
       ["Customer_Name", "Account_Number", "Curent_Balance", "Opening_Date", "Address"],
