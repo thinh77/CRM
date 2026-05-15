@@ -6,14 +6,18 @@ import { usersApi } from "@/api/users.api";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import type { User, Permission } from "@/types";
+import {
+  getNextPermissionState,
+  getPermissionDisplay,
+  hasEffectivePermission,
+  type PermState,
+} from "./permissionDisplay";
 
 interface AssignPermissionsDialogProps {
   open: boolean;
   onClose: () => void;
   user: User | null;
 }
-
-type PermState = "inherit" | "grant" | "revoke";
 
 export function AssignPermissionsDialog({ open, onClose, user }: AssignPermissionsDialogProps) {
   const queryClient = useQueryClient();
@@ -60,11 +64,10 @@ export function AssignPermissionsDialog({ open, onClose, user }: AssignPermissio
     }, {});
   }, [allPermissions]);
 
-  const cycleState = (permId: string) => {
+  const cycleState = (permId: string, isInherited: boolean) => {
     setPermStates((prev) => {
       const current = prev[permId] || "inherit";
-      const next: PermState = current === "inherit" ? "grant" : current === "grant" ? "revoke" : "inherit";
-      return { ...prev, [permId]: next };
+      return { ...prev, [permId]: getNextPermissionState(current, isInherited) };
     });
   };
 
@@ -92,19 +95,13 @@ export function AssignPermissionsDialog({ open, onClose, user }: AssignPermissio
 
   if (!user) return null;
 
-  const stateLabel: Record<PermState, { text: string; cls: string }> = {
-    inherit: { text: "Kế thừa", cls: "bg-gray-100 text-gray-500" },
-    grant: { text: "Cấp thêm", cls: "bg-green-100 text-green-700" },
-    revoke: { text: "Tước bỏ", cls: "bg-red-100 text-red-700" },
-  };
-
   const userPermissions = fullUser?.permissions || [];
 
   return (
     <Modal open={open} onClose={onClose} title={`Quyền riêng — ${user.fullName}`} size="lg">
       <p className="text-xs text-gray-500 mb-4">
-        Click vào nút trạng thái để chuyển đổi: Kế thừa → Cấp thêm → Tước bỏ.
-        Quyền "Kế thừa" lấy từ vai trò của user. Hiện có: {userPermissions.join(", ") || "không có"}.
+        Quyền xanh là quyền đang có hiệu lực; "Kế thừa" lấy từ vai trò của user.
+        Hiện có: {userPermissions.join(", ") || "không có"}.
       </p>
       <div className="space-y-4 mb-6">
         {Object.entries(groupedPermissions).map(([resource, perms]) => (
@@ -113,12 +110,14 @@ export function AssignPermissionsDialog({ open, onClose, user }: AssignPermissio
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {perms.map((p) => {
                 const state = permStates[p.id] || "inherit";
-                const { text, cls } = stateLabel[state];
+                const permissionKey = `${p.resource}:${p.action}`;
+                const isInherited = hasEffectivePermission(permissionKey, userPermissions);
+                const { text, cls } = getPermissionDisplay(state, permissionKey, userPermissions);
                 return (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => cycleState(p.id)}
+                    onClick={() => cycleState(p.id, isInherited)}
                     className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm ${cls} hover:opacity-80`}
                   >
                     <span>{p.action}</span>
