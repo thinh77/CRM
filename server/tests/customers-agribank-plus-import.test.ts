@@ -7,9 +7,12 @@ import { customers } from "../src/db/schema/customers.js";
 import { users } from "../src/db/schema/users.js";
 import * as customersService from "../src/modules/customers/customers.service.js";
 
-function createAgribankPlusXls(rows: Array<Record<string, string>>): Buffer {
+function createAgribankPlusXls(
+  rows: Array<Record<string, string>>,
+  headers: string[] = ["custseq", "mblno1"]
+): Buffer {
   const worksheet = XLSX.utils.json_to_sheet(rows, {
-    header: ["custseq", "mblno1"],
+    header: headers,
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Agribank Plus");
@@ -140,6 +143,55 @@ describe("Agribank Plus customer import", () => {
     expect(rows.find((row) => row.customerCode === "CUST002")).toMatchObject({
       phone: "0900000003",
       hasAgribankPlus: false,
+    });
+  });
+
+  it("accepts Agribank Plus headers with spaces and different casing", async () => {
+    await db.insert(customers).values({
+      businessName: "HKD AG Plus Flexible Header",
+      ownerName: "Owner Flexible Header",
+      customerCode: "CUST004",
+      phone: "0900000004",
+      hasAgribankPlus: false,
+      hasAccount: false,
+      balance: "0",
+      software: "NO",
+      customerGroup: 1,
+      createdBy: testUserId,
+      updatedBy: testUserId,
+    });
+
+    const buffer = createAgribankPlusXls(
+      [{ "CUST SEQ": "CUST004", "mbl no1": "0999999999" }],
+      ["CUST SEQ", "mbl no1"]
+    );
+
+    const result = await customersService.importFromFile(
+      buffer,
+      "agribank-plus-flexible-headers.xls",
+      testUserId,
+      "127.0.0.1",
+      "agribankPlus"
+    );
+
+    expect(result).toMatchObject({
+      success: 0,
+      updated: 1,
+      skipped: 0,
+      errors: [],
+    });
+
+    const [updated] = await db
+      .select({
+        phone: customers.phone,
+        hasAgribankPlus: customers.hasAgribankPlus,
+      })
+      .from(customers)
+      .where(eq(customers.customerCode, "CUST004"));
+
+    expect(updated).toMatchObject({
+      phone: "0999999999",
+      hasAgribankPlus: true,
     });
   });
 
