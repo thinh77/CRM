@@ -13,6 +13,8 @@ const ACTION_LABELS: Record<string, string> = {
   LOGIN: "Đăng nhập",
   EXPORT: "Xuất",
   IMPORT: "Nhập",
+  CLAIM: "Nhận khách hàng",
+  UNCLAIM: "Bỏ nhận khách hàng",
 };
 
 const ACTION_VARIANTS: Record<string, "success" | "error" | "warning" | "info" | "neutral"> = {
@@ -22,6 +24,8 @@ const ACTION_VARIANTS: Record<string, "success" | "error" | "warning" | "info" |
   LOGIN: "info",
   EXPORT: "warning",
   IMPORT: "warning",
+  CLAIM: "success",
+  UNCLAIM: "warning",
 };
 
 const RESOURCE_LABELS: Record<string, string> = {

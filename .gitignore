@@ -22,6 +22,7 @@ tests/
 server/tests/*
 !server/tests/customers-agribank-plus-import.test.ts
 !server/tests/customers-mist81-import.test.ts
+!server/tests/customers-audit.test.ts
 !server/tests/reports.test.ts
 
 # Build output

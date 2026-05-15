@@ -26,7 +26,67 @@ export interface CustomerImportResult {
   skippedRows: { row: number; message: string }[];
 }
 
+interface CustomerAuditSnapshot {
+  id: string;
+  businessName: string;
+  ownerName: string;
+  customerCode: string | null;
+  registrationNumber: string | null;
+  phone: string | null;
+  address: string | null;
+  hasAccount: boolean;
+  accountNumber: string | null;
+  balance: string | null;
+  hasAgribankPlus: boolean;
+  software: string;
+  consultantId: string | null;
+  consultantName: string | null;
+  customerGroup: number;
+  leadSource: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 type FormulaResolver = (formula: string) => unknown;
+
+async function getCustomerAuditSnapshots(ids: string[]): Promise<Map<string, CustomerAuditSnapshot>> {
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      id: customers.id,
+      businessName: customers.businessName,
+      ownerName: customers.ownerName,
+      customerCode: customers.customerCode,
+      registrationNumber: customers.registrationNumber,
+      phone: customers.phone,
+      address: customers.address,
+      hasAccount: customers.hasAccount,
+      accountNumber: customers.accountNumber,
+      balance: customers.balance,
+      hasAgribankPlus: customers.hasAgribankPlus,
+      software: customers.software,
+      consultantId: customers.consultantId,
+      consultantName: users.fullName,
+      customerGroup: customers.customerGroup,
+      leadSource: customers.leadSource,
+      notes: customers.notes,
+      createdBy: customers.createdBy,
+      updatedBy: customers.updatedBy,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+    })
+    .from(customers)
+    .leftJoin(users, eq(customers.consultantId, users.id))
+    .where(inArray(customers.id, ids));
+
+  return new Map(rows.map((row) => [row.id, row]));
+}
 
 function parseDirectFormulaReference(formula: string): { sheetName?: string; address: string } | undefined {
   const normalized = formula.trim().replace(/^=/, "");
@@ -462,6 +522,8 @@ export async function update(
       throw err;
     });
 
+  const updatedAuditSnapshot = (await getCustomerAuditSnapshots([id])).get(id) ?? updated;
+
   // Audit log
   await db.insert(auditLogs).values({
     userId,
@@ -469,7 +531,7 @@ export async function update(
     resource: "customers",
     resourceId: id,
     oldData: existing,
-    newData: updated,
+    newData: updatedAuditSnapshot,
     ipAddress: ip,
   });
 
@@ -1296,6 +1358,8 @@ export async function listPool(query: PoolQuery) {
 }
 
 export async function claimCustomers(customerIds: string[], userId: string, ip?: string) {
+  const oldSnapshots = await getCustomerAuditSnapshots(customerIds);
+
   const result = await db
     .update(customers)
     .set({
@@ -1313,19 +1377,29 @@ export async function claimCustomers(customerIds: string[], userId: string, ip?:
 
   const claimed = result.length;
   const alreadyClaimed = customerIds.length - claimed;
+  const claimedIds = result.map((r) => r.id);
+  const newSnapshots = await getCustomerAuditSnapshots(claimedIds);
 
-  await db.insert(auditLogs).values({
-    userId,
-    action: "CLAIM",
-    resource: "customers",
-    newData: { customerIds: result.map(r => r.id), claimedCount: claimed },
-    ipAddress: ip,
-  });
+  if (claimedIds.length > 0) {
+    await db.insert(auditLogs).values(
+      claimedIds.map((id) => ({
+        userId,
+        action: "CLAIM",
+        resource: "customers",
+        resourceId: id,
+        oldData: oldSnapshots.get(id) ?? null,
+        newData: newSnapshots.get(id) ?? null,
+        ipAddress: ip,
+      }))
+    );
+  }
 
   return { claimed, alreadyClaimed };
 }
 
 export async function unclaimCustomers(customerIds: string[], userId: string, ip?: string) {
+  const oldSnapshots = await getCustomerAuditSnapshots(customerIds);
+
   const result = await db
     .update(customers)
     .set({
@@ -1335,14 +1409,22 @@ export async function unclaimCustomers(customerIds: string[], userId: string, ip
     })
     .where(inArray(customers.id, customerIds))
     .returning({ id: customers.id });
+  const unclaimedIds = result.map((r) => r.id);
+  const newSnapshots = await getCustomerAuditSnapshots(unclaimedIds);
 
-  await db.insert(auditLogs).values({
-    userId,
-    action: "UNCLAIM",
-    resource: "customers",
-    newData: { customerIds: result.map(r => r.id), unclaimedCount: result.length },
-    ipAddress: ip,
-  });
+  if (unclaimedIds.length > 0) {
+    await db.insert(auditLogs).values(
+      unclaimedIds.map((id) => ({
+        userId,
+        action: "UNCLAIM",
+        resource: "customers",
+        resourceId: id,
+        oldData: oldSnapshots.get(id) ?? null,
+        newData: newSnapshots.get(id) ?? null,
+        ipAddress: ip,
+      }))
+    );
+  }
 
   return { unclaimed: result.length };
 }
