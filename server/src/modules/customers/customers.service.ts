@@ -709,7 +709,7 @@ export async function importFromFile(
       "Customer_No",
       "Customer_Name",
       "Account_Number",
-      "Curent_Balance",
+      "Current_Balance",
       "Opening_Date",
       "Address",
     ];
@@ -721,7 +721,7 @@ export async function importFromFile(
       const normalizedHeader = normalizeHeaderKey(rawHeader);
       return (normalizedHeader && mist81HeaderByKey.get(normalizedHeader)) || rawHeader;
     });
-    const requiredHeaders = ["Customer_Name", "Account_Number", "Curent_Balance", "Opening_Date", "Address"];
+    const requiredHeaders = ["Customer_Name", "Account_Number", "Current_Balance", "Opening_Date", "Address"];
     const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
     if (missingHeaders.length > 0) {
       throw new AppError(`File MIST81 thiếu cột bắt buộc: ${missingHeaders.join(", ")}`, 400);
