@@ -931,18 +931,43 @@ export async function exportAccountThresholdByUnitExcel(
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Bao cao tai khoan");
 
-  sheet.columns = [
+  const accountThresholdColumns = [
     { header: "STT", key: "stt", width: 10 },
     { header: "ĐƠN VỊ", key: "unit", width: 30 },
     { header: "SL TÀI KHOẢN", key: "accountCount", width: 16 },
     { header: "TK CÓ SỐ DƯ", key: "positiveBalanceCount", width: 16 },
     { header: "TK CÓ SD TRÊN 50K", key: "over50kCount", width: 20 },
-    { header: "%HT TRÊN TỔNG SỐ 50K", key: "completionRate", width: 24 },
-    { header: "DƯ/TR ĐỒNG", key: "balance", width: 22 },
+    { header: "%HT TRÊN 50K", key: "completionRate", width: 24 },
+    { header: "TỔNG SỐ DƯ/TR ĐỒNG", key: "balance", width: 22 },
     { header: "GHI CHÚ", key: "notes", width: 22 },
   ];
 
-  const headerRow = sheet.getRow(1);
+  sheet.columns = accountThresholdColumns.map(({ key, width }) => ({ key, width }));
+
+  sheet.mergeCells("A1:B1");
+  sheet.getCell("A1").value = "AGRIBANK CHI NHÁNH BẮC TPHCM";
+  sheet.getCell("A1").font = { bold: true };
+
+  sheet.mergeCells("A2:B2");
+  sheet.getCell("A2").value = "PHÒNG KHÁCH HÀNG CÁ NHÂN";
+  sheet.getCell("A2").font = { bold: true };
+
+  sheet.mergeCells("A4:H4");
+  const titleCell = sheet.getCell("A4");
+  titleCell.value = "BÁO CÁO KẾT QUẢ HKD THEO VB 894";
+  titleCell.font = { bold: true, size: 14 };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  sheet.mergeCells("A5:H5");
+  const reportDateCell = sheet.getCell("A5");
+  reportDateCell.value = `NGÀY ${formatVietnamDate(toDate ?? fromDate ?? new Date())}`;
+  reportDateCell.font = { bold: true };
+  reportDateCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  const headerRow = sheet.getRow(7);
+  accountThresholdColumns.forEach((column, index) => {
+    headerRow.getCell(index + 1).value = column.header;
+  });
   headerRow.font = { bold: true };
   headerRow.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   headerRow.fill = {
@@ -975,7 +1000,7 @@ export async function exportAccountThresholdByUnitExcel(
   }
   sheet.getColumn(7).numFmt = "#,##0";
 
-  for (const row of sheet.getRows(1, sheet.rowCount) ?? []) {
+  for (const row of sheet.getRows(7, sheet.rowCount - 6) ?? []) {
     row.eachCell({ includeEmpty: true }, (cell) => {
       cell.border = {
         top: { style: "thin" },

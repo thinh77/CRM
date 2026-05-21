@@ -307,7 +307,27 @@ describe("Reports service", () => {
       const sheet = workbook.getWorksheet("Bao cao tai khoan");
       expect(sheet).toBeDefined();
 
-      const rows = sheet!.getRows(2, sheet!.rowCount - 1)!.map((row) => ({
+      expect(sheet!.getCell("A1").value).toBe("AGRIBANK CHI NHÁNH BẮC TPHCM");
+      expect(sheet!.getCell("B1").master.address).toBe("A1");
+      expect(sheet!.getCell("A2").value).toBe("PHÒNG KHÁCH HÀNG CÁ NHÂN");
+      expect(sheet!.getCell("B2").master.address).toBe("A2");
+      expect(sheet!.getCell("A4").value).toBe("BÁO CÁO KẾT QUẢ HKD THEO VB 894");
+      expect(sheet!.getCell("H4").master.address).toBe("A4");
+      expect(sheet!.getCell("A5").value).toBe("NGÀY 10/03/2036");
+      expect(sheet!.getCell("H5").master.address).toBe("A5");
+      expect(sheet!.getRow(7).values).toEqual([
+        undefined,
+        "STT",
+        "ĐƠN VỊ",
+        "SL TÀI KHOẢN",
+        "TK CÓ SỐ DƯ",
+        "TK CÓ SD TRÊN 50K",
+        "%HT TRÊN 50K",
+        "TỔNG SỐ DƯ/TR ĐỒNG",
+        "GHI CHÚ",
+      ]);
+
+      const rows = sheet!.getRows(8, sheet!.rowCount - 7)!.map((row) => ({
         stt: row.getCell(1).value,
         unit: row.getCell(2).value,
         accountCount: row.getCell(3).value,
