@@ -6,6 +6,7 @@ import { reportsApi } from "@/api/reports.api";
 import { organizationApi } from "@/api/organization.api";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
+import { formatReportExportFilename } from "@/utils/reportFilenames";
 
 function StatCard({
   title,
@@ -99,7 +100,7 @@ export function ReportsPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.download = "bao-cao-khach-hang-moi.xlsx";
+      link.download = formatReportExportFilename();
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success("Xuất báo cáo thành công");

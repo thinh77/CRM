@@ -166,6 +166,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
       software: customers.software,
       customerGroup: customers.customerGroup,
       consultantName: users.fullName,
+      branchName: branches.name,
+      departmentName: departments.name,
       balance: customers.balance,
       leadSource: customers.leadSource,
       notes: customers.notes,
@@ -174,6 +176,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
     })
     .from(customers)
     .leftJoin(users, eq(customers.consultantId, users.id))
+    .leftJoin(branches, eq(users.branchId, branches.id))
+    .leftJoin(departments, eq(users.departmentId, departments.id))
     .where(whereClause)
     .orderBy(desc(customers.createdAt));
 
@@ -218,6 +222,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
     { header: "Phần mềm", key: "software", width: 12 },
     { header: "Nhóm", key: "customerGroup", width: 10 },
     { header: "CBTV", key: "consultantName", width: 24 },
+    { header: "Chi nhánh", key: "branchName", width: 24 },
+    { header: "Phòng ban", key: "departmentName", width: 24 },
     { header: "Nguồn lead", key: "leadSource", width: 20 },
     { header: "Ghi chú", key: "notes", width: 36 },
     { header: "Ngày tạo", key: "createdAt", width: 16 },
@@ -245,6 +251,8 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
       software: row.software,
       customerGroup: row.customerGroup,
       consultantName: row.consultantName || "",
+      branchName: row.branchName || "",
+      departmentName: row.departmentName || "",
       leadSource: row.leadSource || "",
       notes: row.notes || "",
       createdAt: formatVietnamDate(row.createdAt),
