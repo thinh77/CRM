@@ -637,3 +637,363 @@ export async function exportBalanceByOrgExcel(
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+interface AccountThresholdStats {
+  accountCount: number;
+  positiveBalanceCount: number;
+  over50kCount: number;
+  totalBalance: number;
+}
+
+interface AccountThresholdReportRow {
+  stt: number | string | null;
+  unit: string;
+  stats: AccountThresholdStats;
+  bold?: boolean;
+}
+
+interface AccountThresholdDepartmentBucket {
+  key: string;
+  unit: string;
+  order: number;
+  stats: AccountThresholdStats;
+}
+
+interface AccountThresholdTopBucket {
+  key: string;
+  unit: string;
+  order: number;
+  stats: AccountThresholdStats;
+  departments: Map<string, AccountThresholdDepartmentBucket>;
+}
+
+const ACCOUNT_THRESHOLD_AMOUNT = 50000;
+const HQ_BRANCH_CODE = "6421";
+const NAM_HOA_BRANCH_CODE = "6221";
+const PGD_BINH_TAY_NAME = "PGD Bình Tây";
+
+const DEPARTMENT_DISPLAY_LABELS = new Map<string, string>([
+  ["phong khcn", "P.KHCN"],
+  ["phong khdn", "P.KHDN"],
+  ["phong ktnq", "P.KTNQ"],
+  ["phong khqlrr", "P.KHRR"],
+  ["phong khrr", "P.KHRR"],
+  ["phong th", "P.TH"],
+  ["phong ktgsnb", "P.KTGS"],
+  ["phong ktgs", "P.KTGS"],
+]);
+
+const DEPARTMENT_DISPLAY_ORDER = new Map<string, number>([
+  ["phong khcn", 1],
+  ["phong khdn", 2],
+  ["phong ktnq", 3],
+  ["phong khqlrr", 4],
+  ["phong khrr", 4],
+  ["phong th", 5],
+  ["phong ktgsnb", 6],
+  ["phong ktgs", 6],
+]);
+
+function normalizeOrgName(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function emptyAccountThresholdStats(): AccountThresholdStats {
+  return {
+    accountCount: 0,
+    positiveBalanceCount: 0,
+    over50kCount: 0,
+    totalBalance: 0,
+  };
+}
+
+function addAccountThresholdStats(target: AccountThresholdStats, source: AccountThresholdStats) {
+  target.accountCount += source.accountCount;
+  target.positiveBalanceCount += source.positiveBalanceCount;
+  target.over50kCount += source.over50kCount;
+  target.totalBalance += source.totalBalance;
+}
+
+function buildAccountThresholdStats(balanceValue: string | null): AccountThresholdStats {
+  const balance = Number(balanceValue ?? 0);
+  return {
+    accountCount: 1,
+    positiveBalanceCount: balance > 0 ? 1 : 0,
+    over50kCount: balance > ACCOUNT_THRESHOLD_AMOUNT ? 1 : 0,
+    totalBalance: balance,
+  };
+}
+
+function formatCompletionRate(stats: AccountThresholdStats): string {
+  if (stats.accountCount === 0) return "0%";
+  return `${Math.round((stats.over50kCount / stats.accountCount) * 100)}%`;
+}
+
+function isHqBranch(branchCode: string | null, branchName: string | null): boolean {
+  return branchCode === HQ_BRANCH_CODE || normalizeOrgName(branchName) === "hoi so";
+}
+
+function isNamHoaBranch(branchCode: string | null, branchName: string | null): boolean {
+  return branchCode === NAM_HOA_BRANCH_CODE || normalizeOrgName(branchName).includes("nam hoa");
+}
+
+function isPgdBinhTayDepartment(departmentName: string | null): boolean {
+  return normalizeOrgName(departmentName) === normalizeOrgName(PGD_BINH_TAY_NAME);
+}
+
+function formatOtherBranchLabel(branchName: string | null): string {
+  const label = branchName || UNASSIGNED_BRANCH_LABEL;
+  return label.toLocaleUpperCase("vi-VN");
+}
+
+function formatDepartmentLabel(departmentName: string | null): string {
+  if (!departmentName) return UNASSIGNED_DEPT_LABEL;
+
+  const normalized = normalizeOrgName(departmentName);
+  const mapped = DEPARTMENT_DISPLAY_LABELS.get(normalized);
+  if (mapped) return mapped;
+
+  if (normalized.startsWith("phong ")) {
+    return `P.${departmentName.replace(/^phòng\s+/i, "").toLocaleUpperCase("vi-VN")}`;
+  }
+
+  return departmentName.toLocaleUpperCase("vi-VN");
+}
+
+function getDepartmentOrder(departmentName: string | null): number {
+  return DEPARTMENT_DISPLAY_ORDER.get(normalizeOrgName(departmentName)) ?? 99;
+}
+
+function getOrCreateTopBucket(
+  buckets: Map<string, AccountThresholdTopBucket>,
+  key: string,
+  unit: string,
+  order: number
+): AccountThresholdTopBucket {
+  let bucket = buckets.get(key);
+  if (!bucket) {
+    bucket = {
+      key,
+      unit,
+      order,
+      stats: emptyAccountThresholdStats(),
+      departments: new Map(),
+    };
+    buckets.set(key, bucket);
+  }
+  return bucket;
+}
+
+function getOrCreateDepartmentBucket(
+  bucket: AccountThresholdTopBucket,
+  key: string,
+  unit: string,
+  order: number
+): AccountThresholdDepartmentBucket {
+  let department = bucket.departments.get(key);
+  if (!department) {
+    department = {
+      key,
+      unit,
+      order,
+      stats: emptyAccountThresholdStats(),
+    };
+    bucket.departments.set(key, department);
+  }
+  return department;
+}
+
+function compareAccountThresholdBuckets(
+  a: { order: number; unit: string },
+  b: { order: number; unit: string }
+): number {
+  if (a.order !== b.order) return a.order - b.order;
+  return a.unit.localeCompare(b.unit, "vi");
+}
+
+export async function exportAccountThresholdByUnitExcel(
+  filters: BalanceByOrgFilters = {}
+): Promise<Buffer> {
+  const { fromDate, toDate } = resolveDateRange(filters.dateFrom, filters.dateTo);
+  const conditions = [];
+
+  if (fromDate) conditions.push(gte(customers.createdAt, fromDate));
+  if (toDate) conditions.push(lte(customers.createdAt, toDate));
+  if (filters.branchId) conditions.push(eq(users.branchId, filters.branchId));
+  if (filters.departmentId) conditions.push(eq(users.departmentId, filters.departmentId));
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = await db
+    .select({
+      accountNumber: customers.accountNumber,
+      balance: customers.balance,
+      branchId: users.branchId,
+      branchCode: branches.code,
+      branchName: branches.name,
+      departmentId: users.departmentId,
+      departmentName: departments.name,
+    })
+    .from(customers)
+    .leftJoin(users, eq(customers.consultantId, users.id))
+    .leftJoin(branches, eq(users.branchId, branches.id))
+    .leftJoin(departments, eq(users.departmentId, departments.id))
+    .where(whereClause);
+
+  const topBuckets = new Map<string, AccountThresholdTopBucket>();
+
+  for (const row of rows) {
+    const accountNumber = row.accountNumber?.trim();
+    if (!accountNumber) continue;
+
+    const stats = buildAccountThresholdStats(row.balance);
+    const isPgdBinhTay = isPgdBinhTayDepartment(row.departmentName);
+    const isHq = isHqBranch(row.branchCode, row.branchName);
+    const isNamHoa = isNamHoaBranch(row.branchCode, row.branchName);
+
+    const topKey = isPgdBinhTay
+      ? "pgd-binh-tay"
+      : isHq
+        ? "hoi-so"
+        : isNamHoa
+          ? "nam-hoa"
+          : `branch:${row.branchId ?? row.branchName ?? "unassigned"}`;
+    const topUnit = isPgdBinhTay
+      ? "PGD BÌNH TÂY"
+      : isHq
+        ? "HỘI SỞ"
+        : isNamHoa
+          ? "NAM HOA"
+          : formatOtherBranchLabel(row.branchName);
+    const topOrder = isPgdBinhTay ? 2 : isHq ? 1 : isNamHoa ? 3 : 100;
+
+    const topBucket = getOrCreateTopBucket(topBuckets, topKey, topUnit, topOrder);
+    addAccountThresholdStats(topBucket.stats, stats);
+
+    if (isHq && !isPgdBinhTay) {
+      const deptKey = row.departmentId ?? row.departmentName ?? "unassigned-department";
+      const department = getOrCreateDepartmentBucket(
+        topBucket,
+        deptKey,
+        formatDepartmentLabel(row.departmentName),
+        getDepartmentOrder(row.departmentName)
+      );
+      addAccountThresholdStats(department.stats, stats);
+    }
+  }
+
+  const reportRows: AccountThresholdReportRow[] = [];
+  const totalStats = emptyAccountThresholdStats();
+  const sortedTopBuckets = Array.from(topBuckets.values()).sort(compareAccountThresholdBuckets);
+
+  let topIndex = 1;
+  for (const bucket of sortedTopBuckets) {
+    reportRows.push({
+      stt: topIndex,
+      unit: bucket.unit,
+      stats: bucket.stats,
+      bold: true,
+    });
+    addAccountThresholdStats(totalStats, bucket.stats);
+
+    if (bucket.key === "hoi-so") {
+      const sortedDepartments = Array.from(bucket.departments.values()).sort(
+        compareAccountThresholdBuckets
+      );
+      let departmentIndex = 1;
+      for (const department of sortedDepartments) {
+        reportRows.push({
+          stt: `${topIndex}.${departmentIndex}`,
+          unit: department.unit,
+          stats: department.stats,
+        });
+        departmentIndex += 1;
+      }
+    }
+
+    topIndex += 1;
+  }
+
+  reportRows.push({
+    stt: null,
+    unit: "TỔNG CỘNG",
+    stats: totalStats,
+    bold: true,
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Bao cao tai khoan");
+
+  sheet.columns = [
+    { header: "STT", key: "stt", width: 10 },
+    { header: "ĐƠN VỊ", key: "unit", width: 30 },
+    { header: "SL TÀI KHOẢN", key: "accountCount", width: 16 },
+    { header: "TK CÓ SỐ DƯ", key: "positiveBalanceCount", width: 16 },
+    { header: "TK CÓ SD TRÊN 50K", key: "over50kCount", width: 20 },
+    { header: "%HT TRÊN TỔNG SỐ 50K", key: "completionRate", width: 24 },
+    { header: "DƯ/TR ĐỒNG", key: "balance", width: 22 },
+    { header: "GHI CHÚ", key: "notes", width: 22 },
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFE7EAF0" },
+  };
+
+  for (const row of reportRows) {
+    const worksheetRow = sheet.addRow({
+      stt: row.stt,
+      unit: row.unit,
+      accountCount: row.stats.accountCount,
+      positiveBalanceCount: row.stats.positiveBalanceCount,
+      over50kCount: row.stats.over50kCount,
+      completionRate: formatCompletionRate(row.stats),
+      balance: row.stats.totalBalance,
+      notes: "",
+    });
+
+    if (row.bold) {
+      worksheetRow.font = { bold: true };
+    }
+  }
+
+  sheet.getColumn(1).alignment = { horizontal: "center", vertical: "middle" };
+  sheet.getColumn(2).alignment = { horizontal: "left", vertical: "middle" };
+  for (const col of [3, 4, 5, 6, 7]) {
+    sheet.getColumn(col).alignment = { horizontal: "right", vertical: "middle" };
+  }
+  sheet.getColumn(7).numFmt = "#,##0";
+
+  for (const row of sheet.getRows(1, sheet.rowCount) ?? []) {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+    });
+  }
+
+  const totalRow = sheet.getRow(sheet.rowCount);
+  totalRow.font = { bold: true };
+  totalRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFDE6EA" },
+  };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}

@@ -46,4 +46,10 @@ export const reportsApi = {
       params: filters,
       responseType: "blob",
     }),
+
+  exportAccountThresholdByUnit: (filters: ReportsFilters = {}) =>
+    client.get("/reports/export-account-threshold", {
+      params: filters,
+      responseType: "blob",
+    }),
 };

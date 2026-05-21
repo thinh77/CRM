@@ -88,6 +88,7 @@ export function ReportsPage() {
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingBalance, setIsExportingBalance] = useState(false);
+  const [isExportingAccountThreshold, setIsExportingAccountThreshold] = useState(false);
 
   const handleExport = async () => {
     if (hasInvalidRange) {
@@ -165,11 +166,38 @@ export function ReportsPage() {
     }
   };
 
+  const handleExportAccountThreshold = async () => {
+    if (hasInvalidRange) {
+      toast.error("Khoảng thời gian không hợp lệ");
+      return;
+    }
+    setIsExportingAccountThreshold(true);
+    try {
+      const res = await reportsApi.exportAccountThresholdByUnit({
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+        branchId: filters.branchId || undefined,
+        departmentId: filters.departmentId || undefined,
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bao-cao-tai-khoan-theo-don-vi.xlsx";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Xuất báo cáo tài khoản thành công");
+    } catch {
+      toast.error("Xuất báo cáo tài khoản thất bại");
+    } finally {
+      setIsExportingAccountThreshold(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Báo cáo KH mới</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="secondary"
             onClick={handleExportPdf}
@@ -187,6 +215,15 @@ export function ReportsPage() {
           >
             <FileSpreadsheet className="w-4 h-4" />
             Xuất báo cáo số dư
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleExportAccountThreshold}
+            disabled={isExportingAccountThreshold || hasInvalidRange}
+            title="Báo cáo tài khoản theo đơn vị, tách PGD Bình Tây và thống kê tài khoản trên 50K"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Xuất BC tài khoản &gt;50K
           </Button>
           <Button onClick={handleExport} disabled={isLoading || hasInvalidRange}>
             <FileSpreadsheet className="w-4 h-4" />

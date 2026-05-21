@@ -112,3 +112,27 @@ export async function exportBalanceByOrg(req: Request, res: Response, next: Next
     next(err);
   }
 }
+
+export async function exportAccountThresholdByUnit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const filters: reportsService.BalanceByOrgFilters = {
+      dateFrom: getDateQueryParam(req.query.dateFrom, "dateFrom"),
+      dateTo: getDateQueryParam(req.query.dateTo, "dateTo"),
+      branchId: getUuidQueryParam(req.query.branchId, "branchId"),
+      departmentId: getUuidQueryParam(req.query.departmentId, "departmentId"),
+    };
+    const buffer = await reportsService.exportAccountThresholdByUnitExcel(filters);
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="bao-cao-tai-khoan-theo-don-vi.xlsx"'
+    );
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
