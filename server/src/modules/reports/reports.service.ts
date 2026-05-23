@@ -990,7 +990,7 @@ export async function exportAccountThresholdByUnitExcel(
     }
   }
 
-  for (let row = 8; row <= 20; row++) {
+  for (let row = 8; row <= 17; row++) {
     sheet.getCell(`A${row}`).alignment = { horizontal: "center", vertical: "middle" };
     sheet.getCell(`F${row}`).alignment = { horizontal: "right", vertical: "middle" };
   }
@@ -1008,13 +1008,13 @@ export async function exportAccountThresholdByUnitExcel(
     });
   }
 
-  const totalRow = sheet.getRow(sheet.rowCount);
-  totalRow.font = { bold: true };
-  totalRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FFFDE6EA" },
-  };
+  // const totalRow = sheet.getRow(sheet.rowCount);
+  // totalRow.font = { bold: true };
+  // totalRow.fill = {
+  //   type: "pattern",
+  //   pattern: "solid",
+  //   fgColor: { argb: "FFFDE6EA" },
+  // };
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
