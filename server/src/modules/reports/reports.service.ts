@@ -929,7 +929,7 @@ export async function exportAccountThresholdByUnitExcel(
   });
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Bao cao tai khoan");
+  const sheet = workbook.addWorksheet("Bao cao");
 
   const accountThresholdColumns = [
     { header: "STT", key: "stt", width: 10 },
@@ -946,35 +946,32 @@ export async function exportAccountThresholdByUnitExcel(
 
   sheet.mergeCells("A1:B1");
   sheet.getCell("A1").value = "AGRIBANK CHI NHÁNH BẮC TPHCM";
-  sheet.getCell("A1").font = { bold: true };
+  sheet.getCell("A1").font = {name: "Times New Roman", size: 12, bold: true };
+  sheet.getCell("A1").alignment = { horizontal: "center" , vertical: "middle" };
 
   sheet.mergeCells("A2:B2");
   sheet.getCell("A2").value = "PHÒNG KHÁCH HÀNG CÁ NHÂN";
-  sheet.getCell("A2").font = { bold: true };
+  sheet.getCell("A2").font = { name: "Times New Roman", size: 12, bold: true };
+  sheet.getCell("A2").alignment = { horizontal: "center" , vertical: "middle" };
 
   sheet.mergeCells("A4:H4");
   const titleCell = sheet.getCell("A4");
   titleCell.value = "BÁO CÁO KẾT QUẢ HKD THEO VB 894";
-  titleCell.font = { bold: true, size: 14 };
+  titleCell.font = {name: "Times New Roman", size: 14, bold: true };
   titleCell.alignment = { horizontal: "center", vertical: "middle" };
 
   sheet.mergeCells("A5:H5");
   const reportDateCell = sheet.getCell("A5");
   reportDateCell.value = `NGÀY ${formatVietnamDate(toDate ?? fromDate ?? new Date())}`;
-  reportDateCell.font = { bold: true };
+  reportDateCell.font = {name: "Times New Roman", size: 12, bold: true };
   reportDateCell.alignment = { horizontal: "center", vertical: "middle" };
 
   const headerRow = sheet.getRow(7);
   accountThresholdColumns.forEach((column, index) => {
     headerRow.getCell(index + 1).value = column.header;
   });
-  headerRow.font = { bold: true };
+  headerRow.font = {name: "Times New Roman", size: 12, bold: true };
   headerRow.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-  headerRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FFE7EAF0" },
-  };
 
   for (const row of reportRows) {
     const worksheetRow = sheet.addRow({
@@ -987,17 +984,17 @@ export async function exportAccountThresholdByUnitExcel(
       balance: row.stats.totalBalance,
       notes: "",
     });
-
+    worksheetRow.font = { name: "Times New Roman", size: 12 };
     if (row.bold) {
-      worksheetRow.font = { bold: true };
+      worksheetRow.font = {name: "Times New Roman", size: 12, bold: true };
     }
   }
 
-  sheet.getColumn(1).alignment = { horizontal: "center", vertical: "middle" };
-  sheet.getColumn(2).alignment = { horizontal: "left", vertical: "middle" };
-  for (const col of [3, 4, 5, 6, 7]) {
-    sheet.getColumn(col).alignment = { horizontal: "right", vertical: "middle" };
+  for (let row = 8; row <= 20; row++) {
+    sheet.getCell(`A${row}`).alignment = { horizontal: "center", vertical: "middle" };
+    sheet.getCell(`F${row}`).alignment = { horizontal: "right", vertical: "middle" };
   }
+
   sheet.getColumn(7).numFmt = "#,##0";
 
   for (const row of sheet.getRows(7, sheet.rowCount - 6) ?? []) {

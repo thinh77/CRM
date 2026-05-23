@@ -223,7 +223,7 @@ export function ReportsPage() {
             title="Báo cáo tài khoản theo đơn vị, tách PGD Bình Tây và thống kê tài khoản trên 50K"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Xuất BC tài khoản &gt;50K
+            Xuất BC VB894
           </Button>
           <Button onClick={handleExport} disabled={isLoading || hasInvalidRange}>
             <FileSpreadsheet className="w-4 h-4" />
