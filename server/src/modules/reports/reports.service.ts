@@ -962,7 +962,7 @@ export async function exportAccountThresholdByUnitExcel(
 
   sheet.mergeCells("A5:H5");
   const reportDateCell = sheet.getCell("A5");
-  reportDateCell.value = `NGÀY ${formatVietnamDate(toDate ?? fromDate ?? new Date())}`;
+  reportDateCell.value = `NGÀY ${formatVietnamDate(new Date())}`;
   reportDateCell.font = {name: "Times New Roman", size: 12, bold: true };
   reportDateCell.alignment = { horizontal: "center", vertical: "middle" };
 
