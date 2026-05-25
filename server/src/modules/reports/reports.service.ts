@@ -726,7 +726,7 @@ function buildAccountThresholdStats(balanceValue: string | null): AccountThresho
   return {
     accountCount: 1,
     positiveBalanceCount: balance > 0 ? 1 : 0,
-    over50kCount: balance > ACCOUNT_THRESHOLD_AMOUNT ? 1 : 0,
+    over50kCount: balance >= ACCOUNT_THRESHOLD_AMOUNT ? 1 : 0,
     totalBalance: balance,
   };
 }
