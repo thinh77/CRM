@@ -15,5 +15,11 @@ router.get(
   requirePermission("reports:export"),
   reportsController.exportAccountThresholdByUnit
 );
+router.get("/export-vb51", requirePermission("reports:export"), reportsController.exportVb51ByUnit);
+router.get(
+  "/export-vb1763",
+  requirePermission("reports:export"),
+  reportsController.exportVb1763ByUnit
+);
 
 export default router;

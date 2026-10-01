@@ -52,4 +52,14 @@ export const reportsApi = {
       params: filters,
       responseType: "blob",
     }),
+
+  exportVb51ByUnit: () =>
+    client.get("/reports/export-vb51", {
+      responseType: "blob",
+    }),
+
+  exportVb1763ByUnit: () =>
+    client.get("/reports/export-vb1763", {
+      responseType: "blob",
+    }),
 };

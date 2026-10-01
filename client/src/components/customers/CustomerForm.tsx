@@ -28,8 +28,8 @@ const customerSchema = z.object({
   accountNumber: z.string()
     .regex(/^\d{13}$/, "Số tài khoản phải gồm đúng 13 chữ số")
     .refine(
-      (val) => val.startsWith("6421") || val.startsWith("6221"),
-      "Số tài khoản phải bắt đầu bằng 6421 hoặc 6221"
+      (val) => val.startsWith("6421") || val.startsWith("6221") || val.startsWith("1702"),
+      "Số tài khoản phải bắt đầu bằng 6421, 6221 hoặc 1702"
     )
     .optional().or(z.literal("")),
   balance: z.string().optional().or(z.literal("")),
@@ -254,7 +254,7 @@ export function CustomerForm({ open, onClose, customer }: CustomerFormProps) {
                 {...reg}
                 inputMode="numeric"
                 maxLength={13}
-                placeholder="Nhập 13 chữ số, bắt đầu 6421 hoặc 6221"
+                placeholder="Nhập 13 chữ số, bắt đầu 6421, 6221 hoặc 1702"
                 error={errors.accountNumber?.message}
                 onChange={(e) => {
                   e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);

@@ -13,8 +13,8 @@ const customerBaseObject = z.object({
   accountNumber: z.string()
     .regex(/^\d{13}$/, "Số tài khoản phải gồm đúng 13 chữ số")
     .refine(
-      (val) => val.startsWith("6421") || val.startsWith("6221"),
-      "Số tài khoản phải bắt đầu bằng 6421 hoặc 6221"
+      (val) => val.startsWith("6421") || val.startsWith("6221") || val.startsWith("1702"),
+      "Số tài khoản phải bắt đầu bằng 6421, 6221 hoặc 1702"
     )
     .optional().nullable(),
   balance: z.string().or(z.number()).optional().default("0"),

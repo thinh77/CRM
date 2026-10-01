@@ -136,3 +136,33 @@ export async function exportAccountThresholdByUnit(req: Request, res: Response, 
     next(err);
   }
 }
+
+export async function exportVb51ByUnit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const buffer = await reportsService.exportVb51ByUnitExcel();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="bao-cao-vb51.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportVb1763ByUnit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const buffer = await reportsService.exportVb1763ByUnitExcel();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="bao-cao-vb1763.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}

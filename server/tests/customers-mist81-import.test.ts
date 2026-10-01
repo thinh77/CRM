@@ -6,6 +6,35 @@ import { auditLogs } from "../src/db/schema/auditLogs.js";
 import { customers } from "../src/db/schema/customers.js";
 import { users } from "../src/db/schema/users.js";
 import * as customersService from "../src/modules/customers/customers.service.js";
+import {
+  createCustomerSchema,
+  updateCustomerSchema,
+} from "../src/modules/customers/customers.schema.js";
+
+describe("Customer account number prefixes", () => {
+  const customer = {
+    businessName: "HKD Test",
+    ownerName: "Nguyen Van Test",
+    hasAccount: true,
+    accountNumber: "1702000000001",
+  };
+
+  it("accepts the 1702 prefix when creating or updating a customer", () => {
+    expect(createCustomerSchema.safeParse(customer).success).toBe(true);
+    expect(
+      updateCustomerSchema.safeParse({ accountNumber: customer.accountNumber }).success
+    ).toBe(true);
+  });
+
+  it("continues to reject unsupported account number prefixes", () => {
+    expect(
+      createCustomerSchema.safeParse({
+        ...customer,
+        accountNumber: "9999000000001",
+      }).success
+    ).toBe(false);
+  });
+});
 
 function createMist81Xls(rows: unknown[][]): Buffer {
   const worksheet = XLSX.utils.aoa_to_sheet(rows);

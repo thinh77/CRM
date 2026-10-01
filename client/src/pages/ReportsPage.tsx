@@ -89,6 +89,8 @@ export function ReportsPage() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingBalance, setIsExportingBalance] = useState(false);
   const [isExportingAccountThreshold, setIsExportingAccountThreshold] = useState(false);
+  const [isExportingVb51, setIsExportingVb51] = useState(false);
+  const [isExportingVb1763, setIsExportingVb1763] = useState(false);
 
   const handleExport = async () => {
     if (hasInvalidRange) {
@@ -193,6 +195,42 @@ export function ReportsPage() {
     }
   };
 
+  const handleExportVb51 = async () => {
+    setIsExportingVb51(true);
+    try {
+      const res = await reportsApi.exportVb51ByUnit();
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bao-cao-vb51.xlsx";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Xuất báo cáo VB51 thành công");
+    } catch {
+      toast.error("Xuất báo cáo VB51 thất bại");
+    } finally {
+      setIsExportingVb51(false);
+    }
+  };
+
+  const handleExportVb1763 = async () => {
+    setIsExportingVb1763(true);
+    try {
+      const res = await reportsApi.exportVb1763ByUnit();
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bao-cao-vb1763.xlsx";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Xuất báo cáo VB1763 thành công");
+    } catch {
+      toast.error("Xuất báo cáo VB1763 thất bại");
+    } finally {
+      setIsExportingVb1763(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -220,10 +258,28 @@ export function ReportsPage() {
             variant="secondary"
             onClick={handleExportAccountThreshold}
             disabled={isExportingAccountThreshold || hasInvalidRange}
-            title="Báo cáo tài khoản theo đơn vị, tách PGD Bình Tây và thống kê tài khoản trên 50K"
+            title="Báo cáo tài khoản theo đơn vị, tách riêng các PGD và thống kê tài khoản trên 50K"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Xuất BC VB894
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleExportVb51}
+            disabled={isExportingVb51}
+            title="Báo cáo kết quả HKD theo VB51, dùng kế hoạch giao cố định theo mẫu"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Xuất BC VB51
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleExportVb1763}
+            disabled={isExportingVb1763}
+            title="Báo cáo tài khoản HKD mở mới từ 01/08/2026 đến 31/12/2026 theo VB1763"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Xuất BC VB1763
           </Button>
           <Button onClick={handleExport} disabled={isLoading || hasInvalidRange}>
             <FileSpreadsheet className="w-4 h-4" />

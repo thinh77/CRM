@@ -108,6 +108,7 @@ async function seed() {
     const hqDepts = [
       "Ban giám đốc", "Phòng KHQLRR", "Phòng TH", "Phòng KTGSNB",
       "Phòng KHDN", "Phòng KHCN", "Phòng KTNQ", "PGD Bình Tây",
+      "PGD Chánh Hưng", "PGD DBT",
     ];
     for (const name of hqDepts) {
       await db.insert(departments).values({ name, branchId: finalHqBranch.id }).onConflictDoNothing();
