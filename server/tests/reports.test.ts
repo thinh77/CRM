@@ -46,6 +46,7 @@ async function cleanupAccountThresholdReportFixtures() {
       "RPT50K0000004",
       "RPT50K0000005",
       "RPT50K0000006",
+      "RPT50K0000007",
     ])
   );
   await db.delete(users).where(
@@ -69,6 +70,7 @@ const VB51_ACCOUNT_NUMBERS = [
   "RPTVB51PGD005",
   "RPTVB51CH001",
   "RPTVB51DBT001",
+  "RPTVB51POOL01",
   "RPTVB51NH001",
   "RPTVB51NH002",
   "RPTVB51NH003",
@@ -99,6 +101,7 @@ const VB1763_ACCOUNT_NUMBERS = [
   "RPT1763DBT01",
   "RPT1763NH001",
   "RPT1763OTH01",
+  "RPT1763POOL1",
   "RPT1763OLD01",
 ];
 
@@ -254,6 +257,69 @@ describe("Reports service", () => {
     expect(exportedRow.getCell(departmentHeaderIndex).value).toBe("Report Test Department");
     expect(exportedRow.getCell(headerValues.length - 2).value).toBe("15/01/2035");
     expect(exportedRow.getCell(headerValues.length - 1).value).toBe("20/02/2035");
+  });
+
+  it("includes unassigned Pool accounts in organization reports", async () => {
+    const dateFrom = "2035-03-15";
+    const dateTo = "2035-03-15";
+    const baseline = await reportsService.getBranchDepartmentBreakdown(dateFrom, dateTo);
+
+    await db.insert(customers).values({
+      businessName: "HKD Pool Report",
+      ownerName: "Pool Report Owner",
+      accountNumber: "RPTPOOL000001",
+      hasAccount: true,
+      balance: "123000",
+      hasAgribankPlus: true,
+      software: "MISA",
+      customerGroup: 2,
+      consultantId: null,
+      createdBy: testUserId,
+      updatedBy: testUserId,
+      createdAt: new Date("2035-03-15T02:00:00.000Z"),
+    });
+
+    const breakdown = await reportsService.getBranchDepartmentBreakdown(dateFrom, dateTo);
+    const unassigned = breakdown.branches.find(
+      (branch) => branch.name === "CHƯA PHÂN CHI NHÁNH"
+    );
+    const baselineUnassigned = baseline.branches.find(
+      (branch) => branch.name === "CHƯA PHÂN CHI NHÁNH"
+    );
+    expect(unassigned).toBeDefined();
+    expect(unassigned!.totals.total - (baselineUnassigned?.totals.total ?? 0)).toBe(1);
+    expect(unassigned!.totals.withAccount - (baselineUnassigned?.totals.withAccount ?? 0)).toBe(1);
+    expect(breakdown.grandTotal.total - baseline.grandTotal.total).toBe(1);
+
+    const buffer = await reportsService.exportBalanceByOrgExcel({ dateFrom, dateTo });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    const sheet = workbook.getWorksheet("Bao cao so du");
+    expect(sheet).toBeDefined();
+    const unassignedRow = Array.from({ length: sheet!.rowCount }, (_, index) => sheet!.getRow(index + 1))
+      .find((row) => row.getCell(2).value === "CHƯA PHÂN CHI NHÁNH");
+    expect(unassignedRow).toBeDefined();
+    expect(unassignedRow!.getCell(5).value).toBe(123000);
+
+    const detailBuffer = await reportsService.exportNewCustomersExcel({ dateFrom, dateTo });
+    const detailWorkbook = new ExcelJS.Workbook();
+    await detailWorkbook.xlsx.load(detailBuffer as unknown as ExcelJS.Buffer);
+    const detailSheet = detailWorkbook.getWorksheet("Danh sach KH moi");
+    expect(detailSheet).toBeDefined();
+    const detailHeaders = detailSheet!.getRow(1).values as unknown[];
+    const accountIndex = detailHeaders.indexOf("Số TK");
+    const poolRow = Array.from(
+      { length: detailSheet!.rowCount - 1 },
+      (_, index) => detailSheet!.getRow(index + 2)
+    ).find((row) => row.getCell(accountIndex).value === "RPTPOOL000001");
+    expect(poolRow).toBeDefined();
+    expect(poolRow!.getCell(detailHeaders.indexOf("CBTV")).value).toBe("CHƯA CÓ CBTV");
+    expect(poolRow!.getCell(detailHeaders.indexOf("Chi nhánh")).value).toBe(
+      "CHƯA PHÂN CHI NHÁNH"
+    );
+    expect(poolRow!.getCell(detailHeaders.indexOf("Phòng ban")).value).toBe(
+      "CHƯA PHÂN PHÒNG BAN"
+    );
   });
 
   it("exports account threshold report with each PGD as a separate top-level unit", async () => {
@@ -416,6 +482,20 @@ describe("Reports service", () => {
         updatedBy: dbtUser.id,
         createdAt: new Date("2036-03-10T00:00:00.000Z"),
       },
+      {
+        businessName: "Pool Account",
+        ownerName: "Pool Owner",
+        accountNumber: "RPT50K0000007",
+        hasAccount: true,
+        balance: "90000",
+        hasAgribankPlus: false,
+        software: "NO",
+        customerGroup: 1,
+        consultantId: null,
+        createdBy: hqUser.id,
+        updatedBy: hqUser.id,
+        createdAt: new Date("2036-03-10T00:00:00.000Z"),
+      },
     ]);
 
     try {
@@ -514,13 +594,22 @@ describe("Reports service", () => {
           balance: 5000,
         },
         {
+          stt: 6,
+          unit: "CHƯA PHÂN CHI NHÁNH",
+          accountCount: 1,
+          positiveBalanceCount: 1,
+          over50kCount: 1,
+          completionRate: "100%",
+          balance: 90000,
+        },
+        {
           stt: null,
           unit: "TỔNG CỘNG",
-          accountCount: 6,
-          positiveBalanceCount: 6,
-          over50kCount: 3,
-          completionRate: "50%",
-          balance: 265000,
+          accountCount: 7,
+          positiveBalanceCount: 7,
+          over50kCount: 4,
+          completionRate: "57%",
+          balance: 355000,
         },
       ]);
     } finally {
@@ -574,7 +663,7 @@ describe("Reports service", () => {
 
       return {
         sheet: sheet!,
-        rows: Array.from({ length: 13 }, (_, index) => sheet!.getRow(index + 11)).map((row) => ({
+        rows: Array.from({ length: 14 }, (_, index) => sheet!.getRow(index + 11)).map((row) => ({
           stt: row.getCell(1).value,
           unit: row.getCell(2).value as string,
           plan: row.getCell(3).value as number | null,
@@ -616,6 +705,18 @@ describe("Reports service", () => {
         };
       })
     );
+    await db.insert(customers).values({
+      businessName: "VB1763 Pool",
+      ownerName: "VB1763 Pool Owner",
+      accountNumber: "RPT1763POOL1",
+      hasAccount: true,
+      balance: "130000",
+      hasAgribankPlus: false,
+      software: "NO",
+      customerGroup: 1,
+      consultantId: null,
+      createdAt: new Date("2026-10-03T00:00:00.000Z"),
+    });
 
     try {
       const { sheet, rows } = await readRows();
@@ -645,7 +746,8 @@ describe("Reports service", () => {
         { stt: 3, unit: "PGD CHÁNH HƯNG", plan: 0 },
         { stt: 4, unit: "PGD DBT", plan: 0 },
         { stt: 5, unit: "NAM HOA", plan: 75 },
-        { stt: 6, unit: "KHÁC", plan: null },
+        { stt: 6, unit: "CHƯA PHÂN CHI NHÁNH", plan: null },
+        { stt: 7, unit: "KHÁC", plan: null },
         { stt: null, unit: "TỔNG CỘNG", plan: 300 },
       ]);
 
@@ -668,10 +770,12 @@ describe("Reports service", () => {
       expectDelta("PGD CHÁNH HƯNG", 1, 1, 100);
       expectDelta("PGD DBT", 1, 0, 90);
       expectDelta("NAM HOA", 1, 1, 200);
+      expectDelta("CHƯA PHÂN CHI NHÁNH", 1, 1, 130);
       expectDelta("KHÁC", 1, 1, 125);
-      expectDelta("TỔNG CỘNG", 7, 5, 775);
+      expectDelta("TỔNG CỘNG", 8, 6, 905);
       expect(byUnit.get("PGD CHÁNH HƯNG")!.completionRate).toBe(0);
       expect(byUnit.get("PGD DBT")!.completionRate).toBe(0);
+      expect(byUnit.get("CHƯA PHÂN CHI NHÁNH")!.completionRate).toBeNull();
       expect(byUnit.get("KHÁC")!.completionRate).toBeNull();
     } finally {
       await cleanupVb1763ReportFixtures();
@@ -701,7 +805,7 @@ describe("Reports service", () => {
 
       return {
         sheet: sheet!,
-        rows: Array.from({ length: 12 }, (_, index) => sheet!.getRow(index + 8)).map((row) => ({
+        rows: Array.from({ length: 13 }, (_, index) => sheet!.getRow(index + 8)).map((row) => ({
           stt: row.getCell(1).value,
           unit: row.getCell(2).value,
           plan: row.getCell(3).value as number,
@@ -862,6 +966,20 @@ describe("Reports service", () => {
         updatedBy: dbtUser.id,
         createdAt: new Date("2036-04-15T00:00:00.000Z"),
       },
+      {
+        businessName: "VB51 Pool",
+        ownerName: "VB51 Pool Owner",
+        accountNumber: "RPTVB51POOL01",
+        hasAccount: true,
+        balance: "900",
+        hasAgribankPlus: false,
+        software: "NO",
+        customerGroup: 1,
+        consultantId: null,
+        createdBy: hqUser.id,
+        updatedBy: hqUser.id,
+        createdAt: new Date("2036-04-15T00:00:00.000Z"),
+      },
     ]);
 
     try {
@@ -894,6 +1012,7 @@ describe("Reports service", () => {
         { stt: 3, unit: "PGD CHÁNH HƯNG", plan: 0 },
         { stt: 4, unit: "PGD DBT", plan: 0 },
         { stt: 5, unit: "NAM HOA", plan: 520 },
+        { stt: 6, unit: "CHƯA PHÂN CHI NHÁNH", plan: 0 },
         { stt: null, unit: "TỔNG CỘNG", plan: 1500 },
       ]);
       expect(rows.map((row) => row.completionRate)).toEqual(
@@ -920,13 +1039,17 @@ describe("Reports service", () => {
       expect(
         byUnit.get("PGD DBT")!.accountCount - baselineByUnit.get("PGD DBT")!.accountCount
       ).toBe(1);
+      expect(
+        byUnit.get("CHƯA PHÂN CHI NHÁNH")!.accountCount -
+          baselineByUnit.get("CHƯA PHÂN CHI NHÁNH")!.accountCount
+      ).toBe(1);
       expect(byUnit.get("NAM HOA")!.accountCount - baselineByUnit.get("NAM HOA")!.accountCount).toBe(6);
       expect(byUnit.get("NAM HOA")!.balance - baselineByUnit.get("NAM HOA")!.balance).toBe(600);
       expect(
         byUnit.get("TỔNG CỘNG")!.accountCount -
           baselineByUnit.get("TỔNG CỘNG")!.accountCount
-      ).toBe(15);
-      expect(byUnit.get("TỔNG CỘNG")!.balance - baselineByUnit.get("TỔNG CỘNG")!.balance).toBe(5600);
+      ).toBe(16);
+      expect(byUnit.get("TỔNG CỘNG")!.balance - baselineByUnit.get("TỔNG CỘNG")!.balance).toBe(6500);
     } finally {
       await cleanupVb51ReportFixtures();
     }

@@ -254,9 +254,9 @@ export async function exportNewCustomersExcel(filters: ReportFilters = {}): Prom
       hasAgribankPlus: row.hasAgribankPlus ? "Có" : "Không",
       software: row.software,
       customerGroup: row.customerGroup,
-      consultantName: row.consultantName || "",
-      branchName: row.branchName || "",
-      departmentName: row.departmentName || "",
+      consultantName: row.consultantName || UNASSIGNED_CONSULTANT_LABEL,
+      branchName: row.branchName || UNASSIGNED_BRANCH_LABEL,
+      departmentName: row.departmentName || UNASSIGNED_DEPT_LABEL,
       leadSource: row.leadSource || "",
       notes: row.notes || "",
       createdAt: formatVietnamDate(row.createdAt),
@@ -315,6 +315,10 @@ function addStats(a: ReportStats, b: ReportStats): ReportStats {
   };
 }
 
+const UNASSIGNED_BRANCH_LABEL = "CHƯA PHÂN CHI NHÁNH";
+const UNASSIGNED_DEPT_LABEL = "CHƯA PHÂN PHÒNG BAN";
+const UNASSIGNED_CONSULTANT_LABEL = "CHƯA CÓ CBTV";
+
 export async function getBranchDepartmentBreakdown(
   dateFrom?: string,
   dateTo?: string
@@ -345,10 +349,9 @@ export async function getBranchDepartmentBreakdown(
     .groupBy(users.branchId, users.departmentId);
 
   const statsByKey = new Map<string, ReportStats>();
+  let unassignedBranchStats = emptyStats();
   for (const row of aggRows) {
-    if (!row.branchId || !row.departmentId) continue;
-    const key = `${row.branchId}::${row.departmentId}`;
-    statsByKey.set(key, {
+    const stats = {
       total: Number(row.total || 0),
       withAccount: Number(row.withAccount || 0),
       withAgribankPlus: Number(row.withAgribankPlus || 0),
@@ -358,7 +361,13 @@ export async function getBranchDepartmentBreakdown(
       group2: Number(row.group2 || 0),
       group3: Number(row.group3 || 0),
       group4: Number(row.group4 || 0),
-    });
+    };
+    if (!row.branchId) {
+      unassignedBranchStats = addStats(unassignedBranchStats, stats);
+      continue;
+    }
+    const key = `${row.branchId}::${row.departmentId ?? "__unassigned_dept__"}`;
+    statsByKey.set(key, stats);
   }
 
   const branchRows = await db
@@ -391,6 +400,15 @@ export async function getBranchDepartmentBreakdown(
       departmentsOut.push({ id: d.id, name: d.name, stats });
       branchTotals = addStats(branchTotals, stats);
     }
+    const unassignedDepartmentStats = statsByKey.get(`${b.id}::__unassigned_dept__`);
+    if (unassignedDepartmentStats?.total) {
+      departmentsOut.push({
+        id: "__unassigned_dept__",
+        name: UNASSIGNED_DEPT_LABEL,
+        stats: unassignedDepartmentStats,
+      });
+      branchTotals = addStats(branchTotals, unassignedDepartmentStats);
+    }
     result.push({
       id: b.id,
       code: b.code,
@@ -399,6 +417,23 @@ export async function getBranchDepartmentBreakdown(
       departments: departmentsOut,
     });
     grandTotal = addStats(grandTotal, branchTotals);
+  }
+
+  if (unassignedBranchStats.total) {
+    result.push({
+      id: "__unassigned_branch__",
+      code: "",
+      name: UNASSIGNED_BRANCH_LABEL,
+      totals: unassignedBranchStats,
+      departments: [
+        {
+          id: "__unassigned_dept__",
+          name: UNASSIGNED_DEPT_LABEL,
+          stats: unassignedBranchStats,
+        },
+      ],
+    });
+    grandTotal = addStats(grandTotal, unassignedBranchStats);
   }
 
   return { branches: result, grandTotal };
@@ -432,10 +467,6 @@ interface BranchBalance {
   totalBalance: number;
   departments: DepartmentBalance[];
 }
-
-const UNASSIGNED_BRANCH_LABEL = "(Chưa phân chi nhánh)";
-const UNASSIGNED_DEPT_LABEL = "(Chưa phân phòng ban)";
-const UNASSIGNED_CONSULTANT_LABEL = "(Chưa có CBTV)";
 
 export async function exportBalanceByOrgExcel(
   filters: BalanceByOrgFilters = {}
@@ -729,6 +760,7 @@ const VB51_REPORT_ROWS: Vb51ReportRow[] = [
   { stt: 3, key: "pgd-chanh-hung", unit: "PGD CHÁNH HƯNG", plan: 0, bold: true },
   { stt: 4, key: "pgd-dbt", unit: "PGD DBT", plan: 0, bold: true },
   { stt: 5, key: "nam-hoa", unit: "NAM HOA", plan: 520, bold: true },
+  { stt: 6, key: "unassigned", unit: UNASSIGNED_BRANCH_LABEL, plan: 0, bold: true },
   { stt: null, key: "total", unit: "TỔNG CỘNG", plan: 1500, bold: true },
 ];
 
@@ -744,7 +776,8 @@ const VB1763_REPORT_ROWS: Vb1763ReportRow[] = [
   { stt: 3, key: "pgd-chanh-hung", unit: "PGD CHÁNH HƯNG", plan: 0, bold: true },
   { stt: 4, key: "pgd-dbt", unit: "PGD DBT", plan: 0, bold: true },
   { stt: 5, key: "nam-hoa", unit: "NAM HOA", plan: 75, bold: true },
-  { stt: 6, key: "other", unit: "KHÁC", plan: null, bold: true },
+  { stt: 6, key: "unassigned", unit: UNASSIGNED_BRANCH_LABEL, plan: null, bold: true },
+  { stt: 7, key: "other", unit: "KHÁC", plan: null, bold: true },
   { stt: null, key: "total", unit: "TỔNG CỘNG", plan: 300, bold: true },
 ];
 
@@ -890,6 +923,12 @@ function addVb51RowStats(
     departmentName: string | null;
   }
 ) {
+  if (!row.branchCode && !row.branchName) {
+    addVb51Account(statsByKey, "unassigned", row.balance);
+    addVb51Account(statsByKey, "total", row.balance);
+    return;
+  }
+
   const specialPgd = getSpecialPgd(row.departmentName);
   if (specialPgd) {
     addVb51Account(statsByKey, specialPgd.key, row.balance);
@@ -923,6 +962,12 @@ function addVb1763RowStats(
     departmentName: string | null;
   }
 ) {
+  if (!row.branchCode && !row.branchName) {
+    addVb1763Account(statsByKey, "unassigned", row.balance);
+    addVb1763Account(statsByKey, "total", row.balance);
+    return;
+  }
+
   const specialPgd = getSpecialPgd(row.departmentName);
   if (specialPgd) {
     addVb1763Account(statsByKey, specialPgd.key, row.balance);

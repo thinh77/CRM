@@ -76,7 +76,7 @@ export function renderBranchDepartmentReportPdf(
   );
 
   for (const branch of breakdown.branches) {
-    const branchLabel = `${branch.code} — ${branch.name}`;
+    const branchLabel = branch.code ? `${branch.code} — ${branch.name}` : branch.name;
     body.push([
       { text: branchLabel, bold: true, fillColor: "#f3f4f6" },
       ...statsRowCells(branch.totals).map(
